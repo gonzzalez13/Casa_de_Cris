@@ -15,7 +15,7 @@ class QLearningNav:
         # Número de iteraciones del algoritmo durante el aprendizaje
         self.learning_iterations = 200
         # Indica si el robot está en fase aprendizaje (True) o ejecución (False)
-        self.is_learning = True
+        self.is_learning = False
 
         # Tasas de aprendizaje y descuento
         self.alpha = 0.4  
@@ -28,6 +28,9 @@ class QLearningNav:
         # qtable : contiene los valores Q para cada par (estado, acción)
         self.qtable = np.zeros((self.states_number, self.actions_number))
 
+        #Para los movimientos del robot
+        self.speed = 10
+        self.Limit_Wall = 120
         self.robobo = Robobo("localhost")
         self.robobo.connect()
 
@@ -73,16 +76,20 @@ class QLearningNav:
         """Avanzar recto hacia delante.
         Antes de realizar el movimiento, se comprueba y ajusta
         la posición si es necesario llamando a "do_correction."""
-        self.robobo.moveWheelsByTime(10,10,1)
-   
+        self.robobo.moveWheelsByTime(self.speed,self.speed,1)
+
+    def go_back(self):
+        """Retroceder hacia atrás.
+        Antes de realizar el movimiento, se comprueba y ajusta
+        la posición si es necesario llamando a "do_correction."""
+        self.robobo.moveWheelsByTime(-self.speed,-self.speed,1)
 
     def turn_right(self):
         """Girar a la derecha.
         Antes de realizar el movimiento, se comprueba y ajusta
         la posición si es necesario llamando a "do_correction."""
         # Añadir el giro a la derecha
-        self.turn_degrees(40, self.get_state())
-        
+        self.turn_degrees(40, self.get_state())       
 
     def turn_left(self):
         """Girar a la izquierda. 
@@ -96,12 +103,13 @@ class QLearningNav:
     def get_state(self):
         """
         Comprobar y devolver el estado actual del robot
-        """        
+        """ 
+
         self.robobo.wait(0.1)
         
-        if self.robobo.readIRSensor(IR.FrontC)<= self.robobo.readIRSensor(IR.FrontLL) and  self.robobo.readIRSensor(IR.FrontC)<= self.robobo.readIRSensor(IR.FrontRR):
+        if self.robobo.readIRSensor(IR.FrontC)<= self.robobo.readIRSensor(IR.FrontLL) and self.robobo.readIRSensor(IR.FrontC)<= self.robobo.readIRSensor(IR.FrontRR):
             state = 0
-        elif self.robobo.readIRSensor(IR.FrontRR)<= self.robobo.readIRSensor(IR.FrontC) and  self.robobo.readIRSensor(IR.FrontRR)<= self.robobo.readIRSensor(IR.FrontLL):
+        elif self.robobo.readIRSensor(IR.FrontRR)<= self.robobo.readIRSensor(IR.FrontC) and self.robobo.readIRSensor(IR.FrontRR)<= self.robobo.readIRSensor(IR.FrontLL):
             state = 1
         else:
             state = 2
@@ -114,59 +122,44 @@ class QLearningNav:
         Durante la fase de aprendizaje, se realizan movimientos aletorios en un 
         porcentaje de las acciones y en el resto se 
         """
-        if self.is_learning:
-            if self.rng.uniform() < self.exporation_rate:
-                action_to_do = np.random.randint(0, self.actions_number)
-            else:
-                action_to_do = np.argmax(self.qtable[state])    
-        else:
-            action_to_do = np.argmax(self.qtable[state])            
 
-        if action_to_do == 0:
-            self.go_straight()
-        elif action_to_do == 1:
-            self.turn_right()
-        elif action_to_do == 2:
-            self.turn_left()
+        action_to_do = np.argmax(self.qtable[state]) 
+        print (f"Tabla Q: {self.qtable}")           
 
         return action_to_do
 
-
-    def get_reward(self):
-        """Cálculo de la recompensa.
-        
-           Tarea: 
-           Completar este método para que, calcule la recompensa y devuelva 
-           su valor en lugar de devolver siempre el valor -1
-        """     
-        reward = -1.0
-
-        return reward
-
-    def update_qtable(self,reward, state, action):
-        """Actualiza la tabla Q a partir la recompensa obtenida para un estado y acción
+    def do_correction(self):
+        """Comprueba si el robot se encuentra desviado de la trayectoria y, en caso afirmativo,
+        realiza un movimiento de corrección.
         """
-        self.qtable[state, action] = (
-            (1.0 - self.alpha) * self.qtable[state,  action]) + self.alpha * (reward + (self.gamma * max(self.qtable[state])))        
+        possible_movements = True
 
-    def learn(self):
-        """Proceso de aprendizaje.
-        Durante el aprendizaje:
-            1 - Obtener estado actual
-            2 - Obtener acción para el estado actual
-            3 - Calcular la recompensa
-            4 - Actualizar la tabla q
-        """
-        self.is_learning = True
-        for iteration in range(self.learning_iterations):
-            print(f'\nInteraction num: {iteration}')
-            # Obtén el estado en el que se encuentra el robot
-            # Obtén la acción para este estado
-            # Calcula la recompensa            
-            # Actualización de la tabla Q
-            print(self.qtable)
-            self.robobo.wait(0.01)           
+        if (self.robobo.readIRSensor(IR.FrontC) > self.Limit_Wall) or (
+            self.robobo.readIRSensor(IR.FrontLL) > self.Limit_Wall) or (
+            self.robobo.readIRSensor(IR.FrontRR) > self.Limit_Wall):
 
+            self.go_back()
+            self.turn_degrees(40,1)
+            possible_movements = False
+
+        return possible_movements
+
+    def move(self,action):
+        """Realiza la acccion que recibe como parametro, si es posible realizar la accion"""
+
+        possible_movements = self.do_correction()
+
+        if possible_movements:
+            if action == 0: # Avanzar recto
+                self.go_straight()
+            elif action == 1: # Girar a la derecha
+                self.turn_right()
+                self.go_straight()
+            elif action == 2: # Girar a la izquierda
+                self.turn_left()
+                self.go_straight()
+
+        return possible_movements
 
     def run(self):
         """En este método:
@@ -181,15 +174,10 @@ class QLearningNav:
         while True:
             state = self.get_state()
             action = self.get_action(state)
+            action_done = self.move(action)
             print(f"Estado: {state}, Acción: {action}")
-            reward = self.get_reward()
-            self.update_qtable(reward,state,action)
-            print("Q-Table: ")
-            print(self.qtable)
             self.robobo.wait(0.1)
 
-
-        self.is_learning = False
 
 
     def learn_and_run(self):
@@ -216,13 +204,13 @@ class QLearningNav:
         # Sustituye los valores de la tabla por los valores que
         # has estabalecido como ideales.
         self.qtable = np.array([
-            [0,0,0],
-            [0,0,0],
-            [0,0,0]
+            [1,0,0],
+            [0,1,0],
+            [0,0,1]
         ])  
         self.run()
 
 
 if __name__ == "__main__":
     nav = QLearningNav()
-    nav.run()
+    nav.ejercicio1_test2()
