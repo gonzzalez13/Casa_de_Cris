@@ -13,9 +13,9 @@ class QLearningNav:
         # Número de estados
         self.states_number = 3
         # Número de iteraciones del algoritmo durante el aprendizaje
-        self.learning_iterations = 50
+        self.learning_iterations = 20
         # Indica si el robot está en fase aprendizaje (True) o ejecución (False)
-        self.is_learning = False
+        self.is_learning = True
 
         # Tasas de aprendizaje y descuento
         self.alpha = 0.4  
@@ -122,8 +122,14 @@ class QLearningNav:
         Durante la fase de aprendizaje, se realizan movimientos aletorios en un 
         porcentaje de las acciones y en el resto se 
         """
+        if self.is_learning:
+            if self.rng.uniform() < self.exporation_rate:
+                action_to_do = np.random.randint(0, self.actions_number)
+            else:
+                action_to_do = np.argmax(self.qtable[state])    
+        else:
+            action_to_do = np.argmax(self.qtable[state])
 
-        action_to_do = np.argmax(self.qtable[state]) 
         print (f"Tabla Q: {self.qtable}")           
 
         return action_to_do
@@ -132,7 +138,7 @@ class QLearningNav:
         """Comprueba si el robot se encuentra desviado de la trayectoria y, en caso afirmativo,
         realiza un movimiento de corrección.
         """
-        possible_movements = True
+        Possible_movements = True
 
         if (self.robobo.readIRSensor(IR.FrontC) > self.Limit_Wall) or (
             self.robobo.readIRSensor(IR.FrontLL) > self.Limit_Wall) or (
@@ -142,9 +148,9 @@ class QLearningNav:
             self.go_back()
             self.turn_degrees(40,1)
             self.robobo.wait(0.1)
-            possible_movements = False
+            Possible_movements = False
 
-        return possible_movements
+        return Possible_movements
 
     def move(self,action):
         """Realiza la acccion que recibe como parametro, si es posible realizar la accion"""
@@ -171,8 +177,7 @@ class QLearningNav:
         el robot navega con una tabla Q existente. No se incluye el 
         proceso de aprendizaje."""
 
-        state = self.get_state()
-
+        self.is_learning = False
         while True:
             state = self.get_state()
             action = self.get_action(state)
